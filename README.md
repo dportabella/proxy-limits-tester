@@ -96,7 +96,7 @@ This tool helps demystify how HTTP proxies behave. Here is how the discovered li
 ### 2. Max Upload Size (`client_max_body_size`)
 **Nginx directive:** `client_max_body_size 100M;` (Default is 1M. Use `0` for unlimited)
 * **How it works:** When a client sends a request, Nginx inspects the `Content-Length` header. If it exceeds the allowed size, Nginx instantly rejects it with `HTTP 413 Payload Too Large` without consuming any bandwidth.
-* **Why did my test fail with "The write operation timed out"?** If your proxy limit is extremely high (e.g., unlimited) and you test a massive upload like 8GB, Nginx *will* allow it. The Python client will then attempt to actually upload 8GB. If your network speed is not fast enough to complete the upload within the script's hardcoded 120-second client timeout, the *Python client* (not Nginx) will abort the connection.
+* **Why might my test fail with "The write operation timed out"?** If your proxy limit is extremely high (e.g., unlimited) and you test a massive upload like 8GB, Nginx *will* allow it. The Python client will then attempt to actually upload 8GB. If your network speed is extremely slow or drops, your operating system or Python's socket might eventually abort the connection due to inactivity, even though the script allows infinite timeouts.
 
 ### 3. Max Download Size
 **Nginx directive:** Nginx has **NO native directive** to limit backend response sizes.

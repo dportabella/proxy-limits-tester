@@ -94,7 +94,7 @@ def test_upload(base_url, size_mb):
     req = urllib.request.Request(f"{base_url}/upload", data=data, method="POST")
     start = time.time()
     try:
-        urllib.request.urlopen(req, timeout=120) 
+        urllib.request.urlopen(req, timeout=None) 
         elapsed = time.time() - start
         speed = bytes_size / elapsed if elapsed > 0 else 0
         global_max_duration = max(global_max_duration, elapsed)
@@ -123,7 +123,7 @@ def test_download(base_url, size_mb):
     print(f"  Testing download {format_size(bytes_size)}...", end=" ", flush=True)
     start = time.time()
     try:
-        response = urllib.request.urlopen(f"{base_url}/download?size_mb={int(size_mb)}", timeout=120)
+        response = urllib.request.urlopen(f"{base_url}/download?size_mb={int(size_mb)}", timeout=None)
         data = response.read()
         elapsed = time.time() - start
         actual_size = len(data)
