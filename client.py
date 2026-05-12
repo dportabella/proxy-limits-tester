@@ -106,7 +106,12 @@ def find_limit(test_func, base_url, name, is_size=False, initial_val=1.0, margin
             print(f"✅ OK ({time_str}{speed_str})")
             if val >= max_limit: 
                 print(f"  ⚠️ Reached safety test limit ({max_limit}).")
-                return val
+                if is_size:
+                    success_str = format_size(val * 1024 * 1024)
+                else:
+                    success_str = format_time(val)
+                print(f"🎯 Final result for {name}: Confirmed limit >={success_str}")
+                return val, True
             val *= 2
         else:
             min_failure = val
@@ -115,7 +120,7 @@ def find_limit(test_func, base_url, name, is_size=False, initial_val=1.0, margin
             
     if max_success == 0:
         print(f"⚠️ Failed on the first attempt ({initial_val}). The limit is lower.")
-        return 0
+        return 0, False
 
     # Phase 2: Binary search
     while (min_failure - max_success) / max_success > margin:
@@ -138,7 +143,7 @@ def find_limit(test_func, base_url, name, is_size=False, initial_val=1.0, margin
         failure_str = format_time(min_failure)
 
     print(f"🎯 Final result for {name}: Confirmed limit around ~{success_str} (Proxy drops at {failure_str})")
-    return max_success
+    return max_success, False
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Proxy Limits Tester Client")
@@ -163,20 +168,26 @@ if __name__ == "__main__":
         print(f"Detailed error: {e}\n")
         sys.exit(1)
         
-    timeout_limit = find_limit(test_idle_timeout, base_url, "Idle Timeout / proxy_read_timeout", is_size=False, initial_val=args.min_timeout, max_limit=args.max_timeout)
-    upload_limit = find_limit(test_upload, base_url, "Upload Size", is_size=True, initial_val=args.min_upload, max_limit=args.max_upload)
-    download_limit = find_limit(test_download, base_url, "Download Size", is_size=True, initial_val=args.min_download, max_limit=args.max_download)
+    timeout_limit, timeout_hit = find_limit(test_idle_timeout, base_url, "Idle Timeout / proxy_read_timeout", is_size=False, initial_val=args.min_timeout, max_limit=args.max_timeout)
+    upload_limit, upload_hit = find_limit(test_upload, base_url, "Upload Size", is_size=True, initial_val=args.min_upload, max_limit=args.max_upload)
+    download_limit, download_hit = find_limit(test_download, base_url, "Download Size", is_size=True, initial_val=args.min_download, max_limit=args.max_download)
 
     median_upload_speed = get_median(upload_speeds)
     median_download_speed = get_median(download_speeds)
+    
+    def format_summary_val(limit, hit_limit, is_size):
+        if limit == 0:
+            return "N/A"
+        prefix = ">=" if hit_limit else "~"
+        return f"{prefix}{format_size(limit * 1024 * 1024) if is_size else format_time(limit)}"
 
     print("\n" + "="*55)
     print(" SUMMARY OF DISCOVERED PROXY LIMITS")
     print("="*55)
-    print(f" • Idle Timeout (proxy_read_timeout) : ~{format_time(timeout_limit)}")
-    print(f" • Max Upload Size (client_max_body) : ~{format_size(upload_limit * 1024 * 1024)}")
+    print(f" • Idle Timeout (proxy_read_timeout) : {format_summary_val(timeout_limit, timeout_hit, False)}")
+    print(f" • Max Upload Size (client_max_body) : {format_summary_val(upload_limit, upload_hit, True)}")
     print(f" • Median Upload Speed               : {format_speed(median_upload_speed)}")
-    print(f" • Max Download Size                 : ~{format_size(download_limit * 1024 * 1024)}")
+    print(f" • Max Download Size                 : {format_summary_val(download_limit, download_hit, True)}")
     print(f" • Median Download Speed             : {format_speed(median_download_speed)}")
     print(f" • Max Request Duration (Active)     : >={format_time(global_max_duration)}")
     print("="*55 + "\n")
