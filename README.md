@@ -35,6 +35,13 @@ python3 client.py https://your-proxy-domain.com \
   --min-download 50 --max-download 2000
 ```
 
+### Fast Upload Probing
+If you want to discover the max upload size instantly and without consuming any bandwidth, pass the `--fast-upload` flag:
+```bash
+python3 client.py https://your-proxy-domain.com --fast-upload
+```
+This uses HTTP/1.1 `Expect: 100-continue` headers to ask the proxy if it accepts a given `Content-Length` before transmitting the body. It skips the upload completely, returning results in milliseconds instead of minutes.
+
 ### Example Output
 The algorithm will begin probing the proxy with small payloads and low timeouts, then refine the limits:
 ```text

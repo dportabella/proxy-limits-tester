@@ -4,6 +4,10 @@ import time
 import sys
 import argparse
 
+import socket
+import ssl
+import urllib.parse
+
 # Helper functions for human-readable formatting
 def format_size(bytes_val):
     for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
@@ -36,6 +40,51 @@ def get_median(lst):
     if n % 2 == 0:
         return (s[mid - 1] + s[mid]) / 2.0
     return s[mid]
+
+def test_upload_fast(base_url, size_mb):
+    bytes_size = int(size_mb * 1024 * 1024)
+    print(f"  Testing upload (fast header-only) {format_size(bytes_size)}...", end=" ", flush=True)
+    
+    parsed = urllib.parse.urlparse(base_url)
+    host = parsed.hostname
+    port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+    
+    start = time.time()
+    try:
+        sock = socket.create_connection((host, port), timeout=5)
+        if parsed.scheme == 'https':
+            context = ssl.create_default_context()
+            sock = context.wrap_socket(sock, server_hostname=host)
+            
+        request = (f"POST {parsed.path}/upload HTTP/1.1\r\n"
+                   f"Host: {host}\r\n"
+                   f"Content-Length: {bytes_size}\r\n"
+                   f"Expect: 100-continue\r\n"
+                   f"Connection: close\r\n\r\n")
+        sock.sendall(request.encode())
+        
+        # Wait for response up to 2 seconds
+        sock.settimeout(2.0)
+        response = sock.recv(4096).decode('utf-8', errors='ignore')
+        elapsed = time.time() - start
+        
+        if "413" in response:
+            return False, "HTTP 413 Payload Too Large", elapsed, 0
+        elif "100 Continue" in response or "200 OK" in response:
+            return True, "", elapsed, 0
+        elif response == "":
+            return False, "Connection closed", elapsed, 0
+        else:
+            return True, "", elapsed, 0
+            
+    except socket.timeout:
+        # Timeout reading response means the server accepted the headers and is waiting for the body.
+        return True, "", time.time() - start, 0
+    except Exception as e:
+        return False, str(e), time.time() - start, 0
+    finally:
+        try: sock.close()
+        except: pass
 
 def test_upload(base_url, size_mb):
     global global_max_duration, upload_speeds
@@ -156,6 +205,8 @@ if __name__ == "__main__":
     parser.add_argument("--min-upload", type=float, default=1.0, help="Initial upload size to test in MB (default 1.0)")
     parser.add_argument("--min-download", type=float, default=5.0, help="Initial download size to test in MB (default 5.0)")
     
+    parser.add_argument("--fast-upload", action="store_true", help="Use fast header-only probing for upload size (saves bandwidth but skips speed tracking)")
+    
     args = parser.parse_args()
     base_url = args.url.rstrip('/')
         
@@ -169,7 +220,12 @@ if __name__ == "__main__":
         sys.exit(1)
         
     timeout_limit, timeout_hit = find_limit(test_idle_timeout, base_url, "Idle Timeout / proxy_read_timeout", is_size=False, initial_val=args.min_timeout, max_limit=args.max_timeout)
-    upload_limit, upload_hit = find_limit(test_upload, base_url, "Upload Size", is_size=True, initial_val=args.min_upload, max_limit=args.max_upload)
+    
+    if args.fast_upload:
+        upload_limit, upload_hit = find_limit(test_upload_fast, base_url, "Upload Size", is_size=True, initial_val=args.min_upload, max_limit=args.max_upload)
+    else:
+        upload_limit, upload_hit = find_limit(test_upload, base_url, "Upload Size", is_size=True, initial_val=args.min_upload, max_limit=args.max_upload)
+        
     download_limit, download_hit = find_limit(test_download, base_url, "Download Size", is_size=True, initial_val=args.min_download, max_limit=args.max_download)
 
     median_upload_speed = get_median(upload_speeds)
@@ -186,7 +242,7 @@ if __name__ == "__main__":
     print("="*55)
     print(f" • Idle Timeout (proxy_read_timeout) : {format_summary_val(timeout_limit, timeout_hit, False)}")
     print(f" • Max Upload Size (client_max_body) : {format_summary_val(upload_limit, upload_hit, True)}")
-    print(f" • Median Upload Speed               : {format_speed(median_upload_speed)}")
+    print(f" • Median Upload Speed               : {format_speed(median_upload_speed) if not args.fast_upload else 'N/A (fast mode)'}")
     print(f" • Max Download Size                 : {format_summary_val(download_limit, download_hit, True)}")
     print(f" • Median Download Speed             : {format_speed(median_download_speed)}")
     print(f" • Max Request Duration (Active)     : >={format_time(global_max_duration)}")
