@@ -84,5 +84,23 @@ The algorithm will begin probing the proxy with small payloads and low timeouts,
 =======================================================
 ```
 
+## Proxy Concepts & Nginx Configuration
+
+This tool helps demystify how HTTP proxies behave. Here is how the discovered limits map to actual Nginx configurations and architectural concepts:
+
+### 1. Idle Timeout (`proxy_read_timeout`)
+**Nginx directive:** `proxy_read_timeout 300s;` (Default is 60s)
+* **How it works:** This is strictly an **idle timeout**. Nginx resets this timer as long as at least 1 byte of data is flowing between the backend and the proxy. It is not an absolute maximum request duration limit.
+* **WebSockets:** WebSockets bypass HTTP request concepts and become a pure TCP tunnel. The only limit that affects WebSockets is this idle timeout. To keep a WebSocket open indefinitely (for hours or days), the client or backend must send tiny "Ping/Pong" heartbeat frames before this timeout expires.
+
+### 2. Max Upload Size (`client_max_body_size`)
+**Nginx directive:** `client_max_body_size 100M;` (Default is 1M. Use `0` for unlimited)
+* **How it works:** When a client sends a request, Nginx inspects the `Content-Length` header. If it exceeds the allowed size, Nginx instantly rejects it with `HTTP 413 Payload Too Large` without consuming any bandwidth.
+* **Why did my test fail with "The write operation timed out"?** If your proxy limit is extremely high (e.g., unlimited) and you test a massive upload like 8GB, Nginx *will* allow it. The Python client will then attempt to actually upload 8GB. If your network speed is not fast enough to complete the upload within the script's hardcoded 120-second client timeout, the *Python client* (not Nginx) will abort the connection.
+
+### 3. Max Download Size
+**Nginx directive:** Nginx has **NO native directive** to limit backend response sizes.
+* **How it works:** Nginx assumes that if your own backend generated a massive file, it should be delivered. The `Download Size` test in this script is primarily useful for detecting absolute drop limits imposed by commercial Firewalls or CDNs (like Cloudflare's strict tier limits), which will forcibly terminate TCP connections after a certain amount of transferred data. If you only run Nginx, this test will theoretically scale infinitely.
+
 ## Credits
 This very small project was entirely generated using AI via **Google Antigravity**.
