@@ -25,9 +25,20 @@ def format_speed(bytes_per_sec):
 
 # Track the maximum duration of any successful request with data flowing
 global_max_duration = 0.0
+upload_speeds = []
+download_speeds = []
+
+def get_median(lst):
+    if not lst: return 0
+    s = sorted(lst)
+    n = len(s)
+    mid = n // 2
+    if n % 2 == 0:
+        return (s[mid - 1] + s[mid]) / 2.0
+    return s[mid]
 
 def test_upload(base_url, size_mb):
-    global global_max_duration
+    global global_max_duration, upload_speeds
     bytes_size = int(size_mb * 1024 * 1024)
     print(f"  Testing upload {format_size(bytes_size)}...", end=" ", flush=True)
     data = b"0" * bytes_size
@@ -38,6 +49,7 @@ def test_upload(base_url, size_mb):
         elapsed = time.time() - start
         speed = bytes_size / elapsed if elapsed > 0 else 0
         global_max_duration = max(global_max_duration, elapsed)
+        upload_speeds.append(speed)
         return True, "", elapsed, speed
     except urllib.error.HTTPError as e:
         return False, f"HTTP {e.code}", time.time() - start, 0
@@ -57,7 +69,7 @@ def test_idle_timeout(base_url, delay_sec):
         return False, str(e), time.time() - start, 0
 
 def test_download(base_url, size_mb):
-    global global_max_duration
+    global global_max_duration, download_speeds
     bytes_size = int(size_mb * 1024 * 1024)
     print(f"  Testing download {format_size(bytes_size)}...", end=" ", flush=True)
     start = time.time()
@@ -69,6 +81,7 @@ def test_download(base_url, size_mb):
         if actual_size >= bytes_size * 0.99:
             speed = actual_size / elapsed if elapsed > 0 else 0
             global_max_duration = max(global_max_duration, elapsed)
+            download_speeds.append(speed)
             return True, "", elapsed, speed
         else:
             return False, f"Partial download: {format_size(actual_size)}", elapsed, 0
@@ -154,11 +167,16 @@ if __name__ == "__main__":
     upload_limit = find_limit(test_upload, base_url, "Upload Size", is_size=True, initial_val=args.min_upload, max_limit=args.max_upload)
     download_limit = find_limit(test_download, base_url, "Download Size", is_size=True, initial_val=args.min_download, max_limit=args.max_download)
 
-    print("\n" + "="*50)
+    median_upload_speed = get_median(upload_speeds)
+    median_download_speed = get_median(download_speeds)
+
+    print("\n" + "="*55)
     print(" SUMMARY OF DISCOVERED PROXY LIMITS")
-    print("="*50)
+    print("="*55)
     print(f" • Idle Timeout (proxy_read_timeout) : ~{format_time(timeout_limit)}")
     print(f" • Max Upload Size (client_max_body) : ~{format_size(upload_limit * 1024 * 1024)}")
+    print(f" • Median Upload Speed               : {format_speed(median_upload_speed)}")
     print(f" • Max Download Size                 : ~{format_size(download_limit * 1024 * 1024)}")
+    print(f" • Median Download Speed             : {format_speed(median_download_speed)}")
     print(f" • Max Request Duration (Active)     : >={format_time(global_max_duration)}")
-    print("="*50 + "\n")
+    print("="*55 + "\n")

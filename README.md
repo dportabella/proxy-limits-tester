@@ -65,14 +65,16 @@ The algorithm will begin probing the proxy with small payloads and low timeouts,
   Testing download 70.0 MB... ❌ Failed (HTTP 502) after 2.8s
 🎯 Final result for Download Size: Confirmed limit around ~60.0 MB (Proxy drops at 70.0 MB)
 
-==================================================
+=======================================================
  SUMMARY OF DISCOVERED PROXY LIMITS
-==================================================
+=======================================================
  • Idle Timeout (proxy_read_timeout) : ~10.0s
  • Max Upload Size (client_max_body) : ~1.5 MB
+ • Median Upload Speed               : 2.0 MB/s
  • Max Download Size                 : ~60.0 MB
+ • Median Download Speed             : 25.0 MB/s
  • Max Request Duration (Active)     : >=2.4s
-==================================================
+=======================================================
 ```
 
 ## Credits
